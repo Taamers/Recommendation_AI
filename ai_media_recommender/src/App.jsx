@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const TMDB_API_KEY = '5369f08b349e5ed93be337b5cca3011e';
+const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 
 function App() {
   const [inputValue, setInputValue] = useState('');
