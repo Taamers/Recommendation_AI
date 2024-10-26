@@ -1,15 +1,29 @@
 import React, { useState, useEffect } from 'react';
 
 const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
-
 function App() {
   const [inputValue, setInputValue] = useState('');
   const [items, setItems] = useState([]);
   const [highlightedItem, setHighlightedItem] = useState(null);
   const [movies, setMovies] = useState([]);
+  const [recommendations, setRecommendations]=useState([]);
+  const [visibleCount, setVisibleCount] = useState(4)
   const genres = {
     '28': 'Action', '35': 'Comedy', '18': 'Drama', '27': 'Horror',
     '878': 'Sci-Fi', '53': 'Thriller', '16': 'Animation', '12': 'Adventure'
+  };
+
+  const fetchRecommendations = async(movies) => {
+    const recommendationsList=[];
+    for(const movie of movies){
+      // console.log("movie id is: " + movie.id)
+      const response = await fetch(`https://api.themoviedb.org/3/movie/${movie.id}/recommendations?language=en-US&page=1&api_key=${TMDB_API_KEY}`);
+      const data = await response.json();
+      // console.log("data is: " + data)
+      // console.log("num of recs: " + data.results.length);
+      recommendationsList.push(...data.results);
+    }
+    setRecommendations(recommendationsList.slice(0,12));
   };
 
   const handleKeyPress = (e) => {
@@ -18,21 +32,31 @@ function App() {
       setHighlightedItem(inputValue);
       setTimeout(() => setHighlightedItem(null), 2000);
       setInputValue('');
+        
     }
   };
 
-  const handleRemoveItem = (index) => {
-    const newItems = [...items];
-    newItems.splice(index, 1);
-    setItems(newItems);
+  const handleRemoveItem = (movieId) => {
+    // const newItems = [...items];
+    // newItems.splice(index, 1);
+    // setItems(newItems);
+    setItems((prevItems) => prevItems.filter(item => item.id !== movieId));
   };
 
-  const handleAddItem = (title) => {
-    if (!items.includes(title)) {
-      setItems([...items, title]);
-      setHighlightedItem(title);
+  const handleAddItem = (movie) => {
+    console.log(movie.title)
+    // add the entire movie object, not just the title
+    if (!items.some(item => item.id === movie.id)) { // id for uniqueness
+      setItems(prevItems => [...prevItems, { title: movie.title, id: movie.id }]); // add movie object w title and id
+      setHighlightedItem(movie.title);
       setTimeout(() => setHighlightedItem(null), 2000);
-    }
+  }
+};
+  const handleRecMovieClick = () => {
+    fetchRecommendations(items)
+  };
+  const handleShowMore = () => {
+    setVisibleCount((prevCount) => Math.min(prevCount + 4, 12)); 
   };
 
   useEffect(() => {
@@ -72,7 +96,8 @@ function App() {
   }, [TMDB_API_KEY]);
 
   return (
-    <div style={{ padding: '20px', textAlign: 'center', maxWidth: '1480px', margin: '0 auto' }}>
+    <div style={{ display:'flex', padding: '20px', textAlign: 'center', maxWidth: '80vw', margin: '0 auto' }}>
+      <div style={{flex:1,textAlign:'center', paddingRight:'20px', maxWidth:'100%'}}>
       <h1>Item List</h1>
       <input
         type="text"
@@ -86,7 +111,7 @@ function App() {
         {items.map((item, index) => (
           <li
             key={index}
-            onClick={() => handleRemoveItem(index)}
+            onClick={() => handleRemoveItem(item.id)}
             style={{
               padding: '10px',
               borderBottom: '1px solid #ddd',
@@ -101,13 +126,14 @@ function App() {
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'lightcoral'}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = highlightedItem === item ? 'lightgreen' : 'transparent'}
           >
-            {item}
+            {item.title}
           </li>
         ))}
       </ul>
+      <button onClick={handleRecMovieClick}>Recommend Movies</button>
 
       {movies.map((genreMovies, genreIndex) => (
-        <div key={genreIndex} style={{ textAlign: 'left' }}>
+        <div key={`${genreMovies.id}-${genreIndex}`} style={{ textAlign: 'left' }}>
           <h2>{genreMovies.genre}</h2>
           <div style={{ display: 'flex', overflowX: 'scroll', width: '100%' }}>
             {genreMovies.movies && genreMovies.movies.length > 0 ? (
@@ -120,20 +146,21 @@ function App() {
                     backgroundColor: items.includes(movie.title) ? 'lightgreen' : 'white',
                     transition: 'background-color 0.3s'
                   }}
-                  onClick={() => items.includes(movie.title) ? handleRemoveItem(items.indexOf(movie.title)) : handleAddItem(movie.title)}
+                  onClick={() => {
+                      const isInList=items.some(item=>item.id===movie.id);
+                      isInList ? handleRemoveItem(movie.id) : handleAddItem(movie)
+                    }
+                  }
                   onMouseEnter={(e) => {
-                    if (items.includes(movie.title)) {
+                    if (items.includes(movie.id)) {
                       e.currentTarget.style.backgroundColor = 'lightcoral';
                     } else {
                       e.currentTarget.style.backgroundColor = 'lightgray';
                     }
                   }}
                   onMouseLeave={(e) => {
-                    if (items.includes(movie.title)) {
-                      e.currentTarget.style.backgroundColor = 'lightgreen';
-                    } else {
-                      e.currentTarget.style.backgroundColor = 'white';
-                    }
+                    const isInList=items.some(item=>item.id===movie.id);
+                    e.currentTarget.style.backgroundColor = isInList ? 'lightgreen' : 'white';
                   }}
                 >
                   <img src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`} alt={movie.title} style={{ width: '150px', height: '225px' }} />
@@ -146,7 +173,28 @@ function App() {
           </div>
         </div>
       ))}
+      </div>
+      <div style={{flex:1, paddingLeft: '3vw', textAlign:'center', width:"20%"}}>
+        <h2>Recommendations</h2>
+        {recommendations.length > 0 ? (
+          <ul style={{ listStyleType: 'none', padding: 0 }}>
+            {recommendations.slice(0, visibleCount).map((recommendation) => (
+              <li key={recommendation.id}>
+                <img src={`https://image.tmdb.org/t/p/w500${recommendation.poster_path}`} alt={recommendation.title} style={{ width: '150px', height: '225px' }}/>
+                <p>{recommendation.title}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No recs available</p>
+        )}
+        {visibleCount < recommendations.length && (
+          <button style={{flex:1}}onClick={handleShowMore}>Show More</button>
+        )}
+      </div>
+
     </div>
+    
   );
 }
 
